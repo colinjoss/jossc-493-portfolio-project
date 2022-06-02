@@ -4,7 +4,8 @@ import json
 from json2html import json2html
 from constants import *
 from common_functions import get_entity, is_nonexistent, valid, \
-    response_object, new_truck, all_exists_in, one_exists_in
+    response_object, new_truck, all_exists, some_exists
+
 
 client = datastore.Client()
 bp = Blueprint('truck', __name__, url_prefix='/trucks')
@@ -26,9 +27,9 @@ def get_post_truck():
             return {'Error': BAD_REQ}, 415
 
         content = request.get_json()
-        if all_exists_in(['company', 'location'], content):
+        if all_exists(['company', 'location'], content):
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
 
             if AJSON in request.accept_mimetypes:
@@ -81,12 +82,12 @@ def get_put_patch_delete_truck(tid):
         if 'id' in content or 'self' in content:
             return {'Error': NO_EDIT}, 403
 
-        if one_exists_in(['company', 'location'], content):
+        if some_exists(['company', 'location'], content):
             truck = get_entity(client, TRUCK, tid)
             if is_nonexistent(truck):
                 return NO_TRUCK, 404
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
                 truck[prop] = content[prop]
 
@@ -106,12 +107,12 @@ def get_put_patch_delete_truck(tid):
         if 'id' in content or 'self' in content:
             return {'Error': NO_EDIT}, 403
 
-        if one_exists_in(['company', 'location'], content):
+        if some_exists(['company', 'location'], content):
             truck = get_entity(client, TRUCK, tid)
             if truck is None:
                 return NO_TRUCK, 404
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
                 truck[prop] = content[prop]
             msg = {'Message': 'Truck successfully edited: see location header.'}

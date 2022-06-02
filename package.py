@@ -4,7 +4,8 @@ import json
 from json2html import json2html
 from constants import *
 from common_functions import get_entity, is_nonexistent, valid, \
-    response_object, all_exists_in, one_exists_in, new_package
+    response_object, all_exists, some_exists, new_package
+
 
 client = datastore.Client()
 bp = Blueprint('package', __name__, url_prefix='/packages')
@@ -26,9 +27,9 @@ def get_post_package():
             return {'Error': BAD_REQ}, 415
 
         content = request.get_json()
-        if all_exists_in(['source', 'destination', 'content', 'owner'], content):
+        if all_exists(['source', 'destination', 'content', 'owner'], content):
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
 
             if AJSON in request.accept_mimetypes:
@@ -81,12 +82,12 @@ def get_put_patch_delete_package(pid):
         if 'id' in content or 'self' in content:
             return {'Error': NO_EDIT}, 403
 
-        if one_exists_in(['source', 'destination', 'content', 'owner'], content):
+        if some_exists(['source', 'destination', 'content', 'owner'], content):
             package = get_entity(client, PACKAGE, pid)
             if is_nonexistent(package):
                 return NO_PACKAGE, 404
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
                 package[prop] = content[prop]
             if AJSON in request.accept_mimetypes:
@@ -105,12 +106,12 @@ def get_put_patch_delete_package(pid):
         if 'id' in content or 'self' in content:
             return {'Error': NO_EDIT}, 403
 
-        if one_exists_in(['source', 'destination', 'content', 'owner'], content):
+        if some_exists(['source', 'destination', 'content', 'owner'], content):
             package = get_entity(client, PACKAGE, pid)
             if package is None:
                 return NO_PACKAGE, 404
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
                 package[prop] = content[prop]
             msg = {'Message': 'Boat successfully edited: see location header.'}

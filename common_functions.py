@@ -1,9 +1,11 @@
 import re
 from constants import *
+from google.cloud import datastore
 
 
 name_pattern = re.compile("^[a-zA-Z0-9.' ]*$")
 type_pattern = re.compile("^[a-zA-Z ]*$")
+email_pattern = re.compile("[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{3})")
 
 
 def get_entity(client, type, id):
@@ -52,67 +54,93 @@ def new_user(datastore, client, content):
     return package
 
 
-def all_exists_in(values, content):
+def all_exists(values, content):
     for value in values:
         if value not in content:
             return False
     return True
 
 
-def one_exists_in(values, content):
+def some_exists(values, content):
     count = 0
     for value in values:
         if value in content:
             count += 1
-    return count == 0
+    return count != 0
 
 
 def is_nonexistent(entity):
     return entity is None
 
 
-def name_in_use(client, type, name):
-    query = client.query(kind=type)
-    results = list(query.fetch())
-    for entity in results:
-        if str(entity['name']) == str(name):
-            return True
-    return False
-
-
-def valid(prop, input):
-    if prop == 'name':
-        return valid_name(str(input))
-    elif prop == 'type':
-        return valid_type(str(input))
-    elif prop == 'length':
-        return valid_length(input)
+def valid(prop, input, client):
+    if prop == 'company':
+        return valid_company(str(input))
+    elif prop == 'location':
+        return valid_location(str(input))
+    elif prop == 'source':
+        return valid_source(input)
+    elif prop == 'destination':
+        return valid_destination(input)
+    elif prop == 'content':
+        return valid_content(input)
+    elif prop == 'owner':
+        return valid_owner(input, client)
+    elif prop == 'username':
+        return valid_username(input)
+    elif prop == 'email':
+        return valid_email(input)
+    elif prop == 'address':
+        return valid_email(input)
     else:
         return False
 
 
-def valid_name(name):
-    if len(name) > 33:          # Boat name cannot exceed 33 characters
-        return False
-    if name_pattern.match(name) is None:     # Boat name can only use letters, spaces, numbers, and periods
+def valid_company(company):
+    if len(company) > 50:
         return False
     return True
 
 
-def valid_type(type):
-    if len(type) > 255:         # Boat type cannot exceed 255 characters
-        return False
-    if type_pattern.match(type) is None:      # Boat type can only use letters and spaces
+def valid_location(location):
+    return True
+
+
+def valid_source(source):
+    return True
+
+
+def valid_destination(destination):
+    return True
+
+
+def valid_content(content):
+    return True
+
+
+def valid_owner(owner, client):
+    query = client.query(kind=USER)
+    res = list(query.fetch())
+    for e in res:
+        e['id'] = e.key.id
+    for e in res:
+        if int(e['id']) == int(owner):
+            return True
+    return False
+
+
+def valid_username(username):
+    return username.isalnum()
+
+
+def valid_email(email):
+    if email_pattern.match(email) is None:
         return False
     return True
 
 
-def valid_length(length):
-    try:
-        int(length)
-        return True
-    except:
-        return False
+def valid_address(address):
+    return True
 
 
 def response_object(res, type, code, location=None):

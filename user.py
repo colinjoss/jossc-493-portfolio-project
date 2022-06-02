@@ -4,7 +4,8 @@ import json
 from json2html import json2html
 from constants import *
 from common_functions import get_entity, is_nonexistent, valid, \
-    response_object, all_exists_in, one_exists_in, new_user
+    response_object, all_exists, some_exists, new_user
+
 
 client = datastore.Client()
 bp = Blueprint('user', __name__, url_prefix='/users')
@@ -26,9 +27,9 @@ def get_post_user():
             return {'Error': BAD_REQ}, 415
 
         content = request.get_json()
-        if all_exists_in(['username', 'email'], content):
+        if all_exists(['username', 'email'], content):
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
 
             if AJSON in request.accept_mimetypes:
@@ -81,12 +82,12 @@ def get_put_patch_delete_user(pid):
         if 'id' in content or 'self' in content:
             return {'Error': NO_EDIT}, 403
 
-        if one_exists_in(['username', 'email'], content):
+        if some_exists(['username', 'email'], content):
             user = get_entity(client, USER, pid)
             if is_nonexistent(user):
                 return NO_USER, 404
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
                 user[prop] = content[prop]
             if AJSON in request.accept_mimetypes:
@@ -105,12 +106,12 @@ def get_put_patch_delete_user(pid):
         if 'id' in content or 'self' in content:
             return {'Error': NO_EDIT}, 403
 
-        if one_exists_in(['username', 'email'], content):
+        if some_exists(['username', 'email'], content):
             user = get_entity(client, USER, pid)
             if user is None:
                 return NO_USER, 404
             for prop in content:
-                if not valid(prop, content[prop]):
+                if not valid(prop, content[prop], client):
                     return {'Error': BAD_VALUE}, 400
                 user[prop] = content[prop]
             msg = {'Message': 'Boat successfully edited: see location header.'}

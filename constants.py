@@ -1,12 +1,13 @@
 TRUCK = 'truck'
 PACKAGE = 'package'
 USER = 'user'
-URL = 'https://jossc-assign-5.wm.r.appspot.com'
+URL = 'https://jossc-portfolio-project.uw.r.appspot.com/'
+GOOGLE_APPLICATION_CREDENTIALS = 'C:\CS493\jossc-493-portfolio-project\jossc-portfolio-project-641509d936f0.json'
 
 MISSING_ATTR = "The request object is missing at least one of the required attributes"
-NO_TRUCK = "No truck with this boat_id exists"
-NO_PACKAGE = "No package with this boat_id exists"
-NO_USER = "No user with this boat_id exists"
+NO_TRUCK = "No truck with this truck_id exists"
+NO_PACKAGE = "No package with this package_id exists"
+NO_USER = "No user with this user_id exists"
 NOT_SUPPORTED = "This action is not supported for this URL: "
 NOT_ACCEPTABLE = 'Not Acceptable'
 BAD_VALUE = 'A provided value in the request object is invalid.'
