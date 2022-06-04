@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+
+{% block head %}
+
+{% endblock %}
+
+{% block body %}
+
+    <h1>Login to generate JWT</h1>
+    <form method="POST">
+        <label for="username">Username:</label>
+        <input id="username" name="username" type="email">
+        <label for="password">Password:</label>
+        <input id="password" name="password" type="password">
+        <button type="submit" name="add">submit</button>
+    </form>
+
+{% endblock %}

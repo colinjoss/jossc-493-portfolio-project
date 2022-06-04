@@ -2,11 +2,12 @@ from flask import Flask, redirect, request, render_template
 from authlib.integrations.flask_client import OAuth
 import requests
 from constants import *
+import truck
 
 
 app = Flask(__name__)
 oauth = OAuth(app)
-# app.register_blueprint(truck.bp)
+app.register_blueprint(truck.bp)
 # app.register_blueprint(package.bp)
 # app.register_blueprint(user.bp)
 
