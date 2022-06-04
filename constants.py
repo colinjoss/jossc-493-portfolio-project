@@ -2,9 +2,9 @@ TRUCK = 'truck'
 PACKAGE = 'package'
 USER = 'user'
 URL = 'https://jossc-port-proj.uw.r.appspot.com'
+CLIENT_ID = 'BMkKAQwQrKXWvwpGirL7Qcimtu8jAaFt'
+CLIENT_SECRET = 'OfICODJ5bSj1h7dwv5BEQkoZUhcNx83Un6kaeSC2StdTT89IpNfronf2Q_t6IgfB'
 DOMAIN = '493-spring-2022-1.us.auth0.com'
-CLIENT_ID = ''
-CLIENT_SECRET = ''
 
 MISSING_ATTR = "The request object is missing at least one of the required attributes"
 NO_TRUCK = "No truck with this truck_id exists"
