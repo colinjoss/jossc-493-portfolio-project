@@ -1,7 +1,7 @@
 TRUCK = 'truck'
 PACKAGE = 'package'
 USER = 'user'
-URL = 'https://jossc-portfolio-project.uw.r.appspot.com'
+URL = 'https://jossc-port-proj.uw.r.appspot.com'
 DOMAIN = '493-spring-2022-1.us.auth0.com'
 CLIENT_ID = ''
 CLIENT_SECRET = ''
