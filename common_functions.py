@@ -12,6 +12,27 @@ location_pattern = re.compile("[A-Za-z]+, [A-Z]{2}")
 email_pattern = re.compile("[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{3})")
 
 
+# def get_collection(req, kind):
+#     query = client.query(kind=kind)
+#     q_limit = int(req.args.get('limit', '5'))
+#     q_offset = int(req.args.get('offset', '0'))
+#     l_iterator = query.fetch(limit=q_limit, offset=q_offset)
+#     pages = l_iterator.pages
+#     results = list(next(pages))
+#     if l_iterator.next_page_token:
+#         next_offset = q_offset + q_limit
+#         next_url = req.base_url + '?limit=' + str(
+#             q_limit) + '&offset=' + str(next_offset)
+#     else:
+#         next_url = None
+#     for e in results:
+#         e['id'] = e.key.id
+#     output = {kind + 's': results}
+#     if next_url:
+#         output['next'] = next_url
+#     return output
+
+
 def get_entity(type, id):
     """
     Using the entity type and id, returns the entity from datastore.
@@ -215,14 +236,7 @@ def valid_owner(owner):
     """
     Returns true if the owner property is valid, otherwise false.
     """
-    query = client.query(kind=USER)
-    res = list(query.fetch())
-    for e in res:
-        e['id'] = e.key.id
-    for e in res:
-        if int(e['id']) == int(owner):
-            return True
-    return False
+    return True
 
 
 def valid_truck(truck):
