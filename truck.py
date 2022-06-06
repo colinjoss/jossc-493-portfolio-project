@@ -1,4 +1,4 @@
-from flask import Blueprint, request, make_response
+from flask import Blueprint, request
 from common_functions import *
 from google.cloud import datastore
 
@@ -35,16 +35,15 @@ def get_post_truck():
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         content = request.get_json()
-        if all_exists(['company', 'location', 'arrival', 'packages'], content):
-            for prop in content:
-                if not valid(client, prop, content[prop]):
-                    return {'Error': BAD_VALUE}, 400
-            if AJSON in request.accept_mimetypes:
-                truck = new_truck(client, datastore, content)
-                return response_object(make_response(json.dumps(truck)), AJSON, 201)
-            return {'Error': BAD_RES}, 406
-        else:
+        if not all_exists(['company', 'location', 'arrival'], content):
             return {'Error': MISSING_ATTR}, 400
+        for prop in content:
+            if not valid(prop, content[prop]):
+                return {'Error': BAD_VALUE}, 400
+        if AJSON in request.accept_mimetypes:
+            truck = new_truck(client, datastore, content)
+            return json.dumps(truck), 201
+        return {'Error': BAD_RES}, 406
 
     elif request.method == 'PUT':
         return {'Error': NOT_SUPPORTED + 'PUT'}, 405
@@ -67,7 +66,7 @@ def get_put_patch_delete_truck(tid):
             return {'Error': NO_TRUCK}, 404
         truck['id'] = truck.key.id
         if AJSON in request.accept_mimetypes:
-            return response_object(make_response(json.dumps(truck)), AJSON, 200)
+            return json.dumps(truck), 200
         return {'Error': BAD_RES}, 406
 
     elif request.method == 'POST':
@@ -77,60 +76,52 @@ def get_put_patch_delete_truck(tid):
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         content = request.get_json()
-        if 'id' in content or 'self' in content:
+        if some_exists(['id', 'self'], content):
             return {'Error': NO_EDIT}, 403
-        if some_exists(['company', 'location', 'arrival', 'packages'], content):
-            truck = get_entity(client, TRUCK, tid)
-            if is_nonexistent(truck):
-                return {'Error': NO_TRUCK}, 404
-            for prop in content:
-                if not valid(client, prop, content[prop]):
-                    return {'Error': BAD_VALUE}, 400
-                truck[prop] = content[prop]
-            if AJSON in request.accept_mimetypes:
-                res = response_object(make_response(json.dumps(truck)), AJSON, 200)
-            else:
-                return {'Error': BAD_RES}, 406
+        if not some_exists(['company', 'location', 'arrival'], content):
+            return {'Error': MISSING_ATTR}, 400
+        truck = get_entity(client, TRUCK, tid)
+        if is_nonexistent(truck):
+            return {'Error': NO_TRUCK}, 404
+        for prop in content:
+            if not valid(prop, content[prop]):
+                return {'Error': BAD_VALUE}, 400
+            truck[prop] = content[prop]
+        if AJSON in request.accept_mimetypes:
             client.put(truck)
-            return res
+            return json.dumps(truck), 200
+        return {'Error': BAD_RES}, 406
 
     elif request.method == 'PUT':
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         content = request.get_json()
-        if 'id' in content or 'self' in content:
+        if some_exists(['id', 'self'], content):
             return {'Error': NO_EDIT}, 403
-        if some_exists(['company', 'location', 'arrival', 'packages'], content):
-            truck = get_entity(client, TRUCK, tid)
-            if truck is None:
-                return NO_TRUCK, 404
-            for prop in content:
-                if not valid(client, prop, content[prop]):
-                    return {'Error': BAD_VALUE}, 400
-                truck[prop] = content[prop]
-            msg = {'Message': 'Truck successfully edited: see location header.'}
-            if AJSON in request.accept_mimetypes:
-                res = response_object(make_response(json.dumps(msg)), AJSON, 303)
-            else:
-                return {'Error': BAD_RES}, 406
-            client.put(truck)
-            return res
-        else:
+        if not all_exists(['company', 'location', 'arrival'], content):
             return {'Error': MISSING_ATTR}, 400
+        truck = get_entity(client, TRUCK, tid)
+        if truck is None:
+            return {'Error': NO_TRUCK}, 404
+        for prop in content:
+            if not valid(prop, content[prop]):
+                return {'Error': BAD_VALUE}, 400
+            truck[prop] = content[prop]
+        if AJSON in request.accept_mimetypes:
+            client.put(truck)
+            return json.dumps(truck), 200
+        return {'Error': BAD_RES}, 406
 
     elif request.method == 'DELETE':
         truck = get_entity(client, TRUCK, tid)
         if is_nonexistent(truck):
             return {'Error': NO_TRUCK}, 404
-
-        # Delete truck from all packages
         query = client.query(kind=PACKAGE)
         res = list(query.fetch())
         for e in res:
             if e['truck'] == tid:
                 e['truck'] = None
                 client.put(e)
-
         client.delete(client.key(TRUCK, int(tid)))
         return '', 204
 
@@ -155,12 +146,12 @@ def put_delete_truck(tid, pid):
 
     if request.method == 'PUT':
         if package['truck'] is not None:
-            return {'Error': 'PACKAGE_IN_USE'}, 403
+            return {'Error': PACKAGE_IN_USE}, 403
         truck['packages'].append({'id': int(package.key.id), 'self': package['self']})
         package['truck'] = {'id': int(truck.key.id), 'self': truck['self']}
         client.put(truck)
         client.put(package)
-        return '', 204
+        return '', 200
 
     elif request.method == 'PATCH':
         return {'Error': NOT_SUPPORTED + 'PATCH'}, 405
@@ -173,7 +164,7 @@ def put_delete_truck(tid, pid):
                 client.put(truck)
                 client.put(package)
                 return '', 204
-        return {'Error': 'PACKAGE NOT ON TRUCK'}, 404
+        return {'Error': NOT_ON_TRUCK}, 404
 
     else:
         return {'Error': NOT_ACCEPTABLE}, 406

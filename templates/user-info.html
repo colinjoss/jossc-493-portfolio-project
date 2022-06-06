@@ -6,7 +6,10 @@
 
 {% block body %}
 
-    <h1>Your JWT</h1>
+    <h1>Here's your JWT, {{user}}!</h1>
+    <p>{{authid}}</p>
     <p>{{jwt}}</p>
+    <br>
+    <p>(If you want to sign in as a different user, go back and <b>log out</b>)</p>
 
 {% endblock %}

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, make_response
+from flask import Blueprint, request
 from common_functions import *
 from google.cloud import datastore
 
@@ -13,6 +13,8 @@ def get_post_package():
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         payload = verify_jwt(request)
+        if not payload:
+            return {'Error': BAD_AUTH}, 401
         query = client.query(kind=PACKAGE)
         q_limit = int(request.args.get('limit', '5'))
         q_offset = int(request.args.get('offset', '0'))
@@ -39,20 +41,28 @@ def get_post_package():
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         payload = verify_jwt(request)
+        if not payload:
+            return {'Error': BAD_AUTH}, 401
         content = request.get_json()
-        content['owner'] = payload['sub']
-        if all_exists(['description', 'source', 'destination', 'owner', 'truck'], content):
-            for prop in content:
-                if not valid(client, prop, content[prop]):
-                    return {'Error': BAD_VALUE}, 400
-            if AJSON in request.accept_mimetypes:
-                package = new_package(client, datastore, content)
-                return response_object(make_response(json.dumps(package)), AJSON, 201)
-            else:
-                return {'Error': BAD_RES}, 406
-
-        else:
+        if not all_exists(['description', 'source', 'destination'], content):
             return {'Error': MISSING_ATTR}, 400
+        for prop in content:
+            if not valid(prop, content[prop]):
+                return {'Error': BAD_VALUE}, 400
+        if AJSON in request.accept_mimetypes:
+            content['owner'] = payload['sub']
+            package = new_package(client, datastore, content)
+            query = client.query(kind=USER)  # Add package to user packages
+            users = query.fetch()
+            for user in users:
+                if str(user['sub']) == str(package['owner']):
+                    user['packages'].append({'id': package['id'], 'self': package['self']})
+                    client.put(user)
+            return json.dumps(package), 201
+        else:
+            return {'Error': BAD_RES}, 406
+
+
 
     elif request.method == 'PUT':
         return {'Error': NOT_SUPPORTED + 'PUT'}, 405
@@ -73,16 +83,17 @@ def get_put_patch_delete_package(pid):
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         payload = verify_jwt(request)
+        if not payload:
+            return {'Error': BAD_AUTH}, 401
         package = get_entity(client, PACKAGE, pid)
         if is_nonexistent(package):
             return {'Error': NO_PACKAGE}, 404
-        if str(package['owner']) == str(payload['sub']):
-            package['id'] = package.key.id
-            if AJSON in request.accept_mimetypes:
-                return response_object(make_response(json.dumps(package)), AJSON, 200)
-            return {'Error': BAD_RES}, 406
-        else:
-            return {'Error': 'JWT DOES NOT MATCH'}, 406         ##########
+        if not is_authorized(package['owner'], payload['sub']):
+            return {'Error': BAD_AUTH}, 401
+        package['id'] = package.key.id
+        if AJSON in request.accept_mimetypes:
+            return json.dumps(package), 200
+        return {'Error': BAD_RES}, 406
 
     elif request.method == 'POST':
         return {'Error': NOT_SUPPORTED + 'POST'}, 405
@@ -91,68 +102,71 @@ def get_put_patch_delete_package(pid):
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         payload = verify_jwt(request)
+        if not payload:
+            return {'Error': BAD_AUTH}, 401
         content = request.get_json()
-        if 'id' in content or 'self' in content:
+        if some_exists(['id', 'self'], content):
             return {'Error': NO_EDIT}, 403
-        if some_exists(['description', 'source', 'destination', 'truck'], content):
-            package = get_entity(client, PACKAGE, pid)
-            if str(package['owner']) == str(payload['sub']):
-                if is_nonexistent(package):
-                    return NO_PACKAGE, 404
-                for prop in content:
-                    if not valid(client, prop, content[prop]):
-                        return {'Error': BAD_VALUE}, 400
-                    package[prop] = content[prop]
-                if AJSON in request.accept_mimetypes:
-                    res = response_object(make_response(json.dumps(package)), AJSON, 200)
-                else:
-                    return {'Error': BAD_RES}, 406
-                client.put(package)
-                return res
-            else:
-                return {'Error': 'JWT DOES NOT MATCH'}, 406     ##########
+        if not some_exists(['description', 'source', 'destination'], content):
+            return {'Error': MISSING_ATTR}, 400
+        package = get_entity(client, PACKAGE, pid)
+        if not is_authorized(package['owner'], payload['sub']):
+            return {'Error': BAD_AUTH}, 401
+        if is_nonexistent(package):
+            return {'Error': NO_PACKAGE}, 404
+        for prop in content:
+            if not valid(prop, content[prop]):
+                return {'Error': BAD_VALUE}, 400
+            package[prop] = content[prop]
+        if AJSON in request.accept_mimetypes:
+            client.put(package)
+            return json.dumps(package), 200
+        return {'Error': BAD_RES}, 406
 
     elif request.method == 'PUT':
         if request.content_type != AJSON:
             return {'Error': BAD_REQ}, 415
         payload = verify_jwt(request)
+        if not payload:
+            return {'Error': BAD_AUTH}, 401
         content = request.get_json()
-        if 'id' in content or 'self' in content:
+        if some_exists(['id', 'self'], content):
             return {'Error': NO_EDIT}, 403
-        if some_exists(['description', 'source', 'destination', 'owner', 'truck'], content):
-            package = get_entity(client, PACKAGE, pid)
-            if str(package['owner']) == str(payload['sub']):
-                if package is None:
-                    return NO_PACKAGE, 404
-                for prop in content:
-                    if not valid(client, prop, content[prop]):
-                        return {'Error': BAD_VALUE}, 400
-                    package[prop] = content[prop]
-                msg = {'Message': 'Boat successfully edited: see location header.'}
-                if AJSON in request.accept_mimetypes:
-                    res = response_object(make_response(json.dumps(msg)), AJSON, 303)
-                else:
-                    return {'Error': BAD_RES}, 406
-                client.put(package)
-                return res
-            else:
-                return {'Error': 'JWT DOES NOT MATCH'}, 406     ##########
-        else:
+        if not some_exists(['description', 'source', 'destination'], content):
             return {'Error': MISSING_ATTR}, 400
+        package = get_entity(client, PACKAGE, pid)
+        if not is_authorized(package['owner'], payload['sub']):
+            return {'Error': BAD_AUTH}, 401
+        if package is None:
+            return {'Error': NO_PACKAGE}, 404
+        for prop in content:
+            if not valid(prop, content[prop]):
+                return {'Error': BAD_VALUE}, 400
+            package[prop] = content[prop]
+        if AJSON in request.accept_mimetypes:
+            client.put(package)
+            return json.dumps(package), 200
+        return {'Error': BAD_RES}, 406
 
     elif request.method == 'DELETE':
         payload = verify_jwt(request)
-        package = get_entity(client, PACKAGE, pid)
-        if str(package['owner']) != str(payload['sub']):
-            return {'Error': 'JWT DOES NOT MATCH'}, 406         ##########
+        if not payload:
+            return {'Error': BAD_AUTH}, 401
+        package = get_entity(client, PACKAGE, int(pid))
+        if not is_authorized(payload['sub'], package['owner']):
+            return {'Error': BAD_AUTH}, 401
         if is_nonexistent(package):
             return {'Error': NO_PACKAGE}, 404
-        user = get_entity(client, USER, package['owner'])       # Delete package from all user packages
-        user['packages'].remove(pid)
-        client.put(user)
-        truck = get_entity(client, TRUCK, package['truck'])     # Delete package from all truck packages
-        truck['packages'].remove(pid)
-        client.put(truck)
+        query = client.query(kind=USER)                         # Delete package from all user packages
+        users = query.fetch()
+        for user in users:
+            if is_authorized(user['sub'], package['owner']):
+                user['packages'] = [d for d in user['packages'] if int(d['id']) != int(pid)]
+                client.put(user)
+        if package['truck'] is not None:
+            truck = get_entity(client, TRUCK, package['truck']['id'])     # Delete package from all truck packages
+            truck['packages'] = [d for d in truck['packages'] if int(d['id']) != int(pid)]
+            client.put(truck)
         client.delete(client.key(PACKAGE, int(pid)))
         return '', 204
 

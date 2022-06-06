@@ -5,8 +5,7 @@ from jose import jwt
 from six.moves.urllib.request import urlopen
 
 
-location_pattern = re.compile("[A-Za-z]+, [A-Z]{2}")
-email_pattern = re.compile("[A-Za-z0-9]+@[A-Za-z0-9-]+(\.[A-Z|a-z]{3})")
+location_pattern = re.compile("[A-Za-z ]+, [A-Z]{2}")
 
 
 def verify_jwt(request):
@@ -14,20 +13,16 @@ def verify_jwt(request):
         auth_header = request.headers['Authorization'].split()
         token = auth_header[1]
     else:
-        return {"code": "no auth header",
-                "description": "Authorization header is missing"}, 401
+        return False
 
     jsonurl = urlopen("https://" + DOMAIN + "/.well-known/jwks.json")
     jwks = json.loads(jsonurl.read())
     try:
         unverified_header = jwt.get_unverified_header(token)
     except jwt.JWTError:
-        return 'BAD'
+        return False
     if unverified_header["alg"] == "HS256":
-        return {"code": "invalid_header",
-                "description":
-                    "Invalid header. "
-                    "Use an RS256 signed JWT Access Token"}, 401
+        return False
     rsa_key = {}
     for key in jwks["keys"]:
         if key["kid"] == unverified_header["kid"]:
@@ -48,38 +43,23 @@ def verify_jwt(request):
                 issuer="https://" + DOMAIN + "/"
             )
         except jwt.ExpiredSignatureError:
-            return {"code": "token_expired",
-                    "description": "token is expired"}, 401
+            return False
         except jwt.JWTClaimsError:
-            return {"code": "invalid_claims",
-                    "description":
-                        "incorrect claims,"
-                        " please check the audience and issuer"}, 401
+            return False
         except Exception:
-            return 'BAD'
+            return 401
 
         return payload
     else:
-        return 'BAD'
+        return False
 
 
-def get_entity(client, kind, id):
+def get_entity(client, kind, eid):
     """
     Using the entity kind and id, returns the entity from datastore.
     """
-    key = client.key(kind, int(id))
+    key = client.key(kind, int(eid))
     return client.get(key)
-
-
-def response_object(res, type, code, location=None):
-    """
-    Returns the output formatted with a status code and mimetype.
-    """
-    if location is not None:
-        res.location = location
-    res.mimetype = type
-    res.status_code = code
-    return res
 
 
 def new_truck(client, ds, content):
@@ -93,6 +73,7 @@ def new_truck(client, ds, content):
         'arrival': content['arrival']
     })
     client.put(truck)
+    truck['packages'] = []
     truck['id'] = truck.key.id
     truck['self'] = URL + '/trucks/' + str(truck.key.id)
     client.put(truck)
@@ -109,7 +90,7 @@ def new_package(client, ds, content):
         'source': content['source'],
         'destination': content['destination'],
         'owner': content['owner'],
-        'truck': content['truck']
+        'truck': None
     })
     client.put(package)
     package['id'] = package.key.id
@@ -122,17 +103,18 @@ def new_user(client, ds, content):
     """
     Creates a new user entity.
     """
-    package = ds.entity.Entity(key=client.key(USER))
-    package.update({
-        'username': content['username'],
+    user = ds.entity.Entity(key=client.key(USER))
+    user.update({
+        'nickname': content['nickname'],
         'email': content['email'],
-        'address': content['address']
+        'sub': content['sub']
     })
-    client.put(package)
-    package['id'] = package.key.id
-    package['self'] = URL + '/users/' + str(package.key.id)
-    client.put(package)
-    return package
+    client.put(user)
+    user['packages'] = []
+    user['id'] = user.key.id
+    user['self'] = URL + '/users/' + str(user.key.id)
+    client.put(user)
+    return user
 
 
 def all_exists(values, content):
@@ -162,14 +144,19 @@ def is_nonexistent(entity):
     return entity is None
 
 
-def valid(client, prop, input):
+def is_authorized(sub1, sub2):
+    """
+    Returns true if sub value matches entity sub, false otherwise.
+    """
+    return str(sub1) == str(sub2)
+
+
+def valid(prop, user_input):
     """
     Return true if the given input property is valid otherwise false.
     """
     if prop in validate:
-        if prop == 'truck' or prop == 'packages':
-            validate[prop](client, input)
-        return validate[prop](input)
+        return validate[prop](user_input)
     return False
 
 
@@ -202,87 +189,7 @@ def valid_description(description):
     """
     Returns true if the description property is valid, otherwise false.
     """
-    return description.isalpha() and len(description) < 50
-
-
-def valid_source(source):
-    """
-    Returns true if the source property is valid, otherwise false.
-    """
-    if location_pattern.match(source) is None:
-        return False
-    return True
-
-
-def valid_destination(destination):
-    """
-    Returns true if the destination property is valid, otherwise false.
-    """
-    if location_pattern.match(destination) is None:
-        return False
-    return True
-
-
-def valid_username(username):
-    """
-    Returns true if the username property is valid, otherwise false.
-    """
-    return username.isalnum() and len(username) < 16
-
-
-def valid_email(email):
-    """
-    Returns true if the email property is valid, otherwise false.
-    """
-    if email_pattern.match(email) is None:
-        return False
-    return len(email) < 50
-
-
-def valid_address(address):
-    """
-    Returns true if the address property is valid, otherwise false.
-    """
-    if location_pattern.match(address) is None:
-        return False
-    return True
-
-
-def valid_packages(client, packages):
-    """
-    Returns true if the all package id's are valid, otherwise false.
-    """
-    query = client.query(kind=PACKAGE)
-    res = list(query.fetch())
-    for e in res:
-        e['id'] = e.key.id
-    count = 0
-    for package in packages:
-        for e in res:
-            if e['id'] == package:
-                count += 1
-    return count == len(packages)
-
-
-def valid_owner(owner):
-    """
-    Returns true if the owner property is valid, otherwise false.
-    """
-    return True
-
-
-def valid_truck(client, truck):
-    """
-    Returns true if the truck property is valid, otherwise false.
-    """
-    query = client.query(kind=TRUCK)
-    res = list(query.fetch())
-    for e in res:
-        e['id'] = e.key.id
-    for e in res:
-        if int(e['id']) == int(truck):
-            return True
-    return False
+    return all(c.isalpha() or c.isspace() for c in description) and len(description) < 50
 
 
 validate = {
@@ -290,12 +197,6 @@ validate = {
     'location': valid_location,
     'arrival': valid_arrival,
     'description': valid_description,
-    'source': valid_source,
-    'destination': valid_destination,
-    'owner': valid_owner,
-    'truck': valid_truck,
-    'username': valid_username,
-    'email': valid_email,
-    'address': valid_address,
-    'packages': valid_packages
+    'source': valid_location,
+    'destination': valid_location
 }

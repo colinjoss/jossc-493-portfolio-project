@@ -1,61 +1,82 @@
-from flask import Flask, redirect, request, render_template
 from authlib.integrations.flask_client import OAuth
-import requests
+from flask import Flask, redirect, render_template, url_for, request
 from constants import *
+from google.cloud import datastore
+from common_functions import new_user
+from urllib.parse import quote_plus, urlencode
 import truck
 import package
 import user
 
 
+client = datastore.Client()
+
+
 app = Flask(__name__)
-oauth = OAuth(app)
+app.secret_key = SECRET_KEY
 app.register_blueprint(truck.bp)
 app.register_blueprint(package.bp)
 app.register_blueprint(user.bp)
 
+oauth = OAuth(app)
 auth0 = oauth.register(
     'auth0',
     client_id=CLIENT_ID,
     client_secret=CLIENT_SECRET,
-    api_base_url="https://" + DOMAIN,
-    access_token_url="https://" + DOMAIN + "/oauth/token",
-    authorize_url="https://" + DOMAIN + "/authorize",
     client_kwargs={
-        'scope': 'openid profile email',
+        "scope": "openid profile email",
     },
+    server_metadata_url=f'https://{DOMAIN}/.well-known/openid-configuration'
 )
 
 
-@app.route('/')
+@app.route("/", methods=["GET", "POST"])
 def index():
-    return "Please navigate to /login to create a JWT"
+    return redirect("/login")
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == 'POST':
-        content = request.form
-        username = content['username']
-        password = content['password']
-        body = {'grant_type': 'password',
-                'username': username,
-                'password': password,
-                'client_id': CLIENT_ID,
-                'client_secret': CLIENT_SECRET
-                }
-        headers = {'content-type': 'application/json'}
-        url = 'https://' + DOMAIN + '/oauth/token'
-        res = requests.post(url, json=body, headers=headers)
-        id_token = res.json()['id_token']
-        return redirect(f"{URL}/user-info?id_token={id_token}")
+        if request.form.get("login") is not None:
+            return oauth.auth0.authorize_redirect(
+                redirect_uri=url_for("user_info", _external=True)
+            )
+        elif request.form.get("logout") is not None:
+            return redirect(
+                "https://" + DOMAIN
+                + "/v2/logout?"
+                + urlencode(
+                    {
+                        "returnTo": url_for("index", _external=True),
+                        "client_id": CLIENT_ID,
+                    },
+                    quote_via=quote_plus,
+                )
+            )
+        else:
+            return 'Nope'
     else:
         return render_template('login.html')
 
 
-@app.route('/user-info', methods=['GET'])
+@app.route("/user-info", methods=["GET", "POST"])
 def user_info():
-    jwt = request.args.get('id_token')
-    return render_template('user-info.html', jwt=jwt)
+    token = oauth.auth0.authorize_access_token()
+    query = client.query(kind=USER)
+    users = query.fetch()
+    for usr in users:
+        if str(usr['sub']) == str(token['userinfo']['sub']):
+            return render_template('user-info.html', jwt=token['id_token'], user=token['userinfo']['nickname'])
+    new_user(client, datastore, {
+        'nickname': token['userinfo']['nickname'],
+        'email': token['userinfo']['email'],
+        'sub': token['userinfo']['sub']
+    })
+    return render_template('user-info.html',
+                           jwt=token['id_token'],
+                           authid=token['userinfo']['sub'],
+                           user=token['userinfo']['nickname'])
 
 
 if __name__ == '__main__':
