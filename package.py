@@ -62,8 +62,6 @@ def get_post_package():
         else:
             return {'Error': BAD_RES}, 406
 
-
-
     elif request.method == 'PUT':
         return {'Error': NOT_SUPPORTED + 'PUT'}, 405
 
